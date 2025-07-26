@@ -164,7 +164,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     import os
-    token = os.environ.get("8497829532:AAFkxyu-k4HxiY2K1hsRMcSS6JaQ9iZb1MA")  # безопасный способ
+    token = os.environ.get("BOT_TOKEN")  # безопасный способ
     if not token:
         raise ValueError("Переменная окружения BOT_TOKEN не установлена")
 
