@@ -7,7 +7,7 @@ from session_manager import save_user_session, get_session
 
 user_steps = {}
 MAX_BUTTONS = 8
-BOT_USERNAME = "kontaktuserbot"  # Укажи username своего бота без @
+BOT_USERNAME = "AZER0bot"  # Укажи username своего бота без @
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
