@@ -11,6 +11,9 @@ BOT_USERNAME = "kontaktuserbot"  # Укажи username своего бота б�
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_type = update.effective_chat.type
+
+    # Обработка старта по ссылке ?start=share_x
     args = context.args
     if args and args[0].startswith("share_"):
         msg_id = int(args[0].split("_")[1])
@@ -34,6 +37,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Инструкция не найдена ❌")
         return
 
+    # Если бот вызван в группе — просто ответ
+    if chat_type in ["group", "supergroup"]:
+        await update.message.reply_text("Бот активен ✅\nЧтобы создать инструкцию, напиши /start в личку.")
+        return
+
+    # Старт в личке — начало создания инструкции
     user_id = update.effective_user.id
     user_steps[user_id] = {
         "step": "photo",
@@ -170,7 +179,7 @@ def main():
 
     app = ApplicationBuilder().token(token).build()
 
-    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start, filters=filters.ALL))  # важно!
     app.add_handler(CommandHandler("skip", skip))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
