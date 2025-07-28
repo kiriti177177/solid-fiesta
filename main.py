@@ -4,17 +4,33 @@ from telegram.ext import (
     ContextTypes, CallbackQueryHandler, filters
 )
 from session_manager import save_user_session, get_session
+from dotenv import load_dotenv
+import os
+
+# Загружаем переменные окружения
+load_dotenv()
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_USERNAME = os.environ.get("BOT_USERNAME")
+ALLOWED_USER_IDS = {
+    int(uid.strip()) for uid in os.environ.get("ALLOWED_USER_IDS", "").split(",") if uid.strip().isdigit()
+}
+
+if not BOT_TOKEN:
+    raise ValueError("Переменная окружения BOT_TOKEN не установлена")
+
+if not BOT_USERNAME:
+    raise ValueError("Переменная окружения BOT_USERNAME не установлена")
 
 user_steps = {}
 MAX_BUTTONS = 8
-BOT_USERNAME = "AZER0bot"  # Укажи username своего бота без @
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_type = update.effective_chat.type
-
-    # Обработка старта по ссылке ?start=share_x
     args = context.args
+    user_id = update.effective_user.id
+
+    # Если это просмотр инструкции по ссылке — доступен всем
     if args and args[0].startswith("share_"):
         msg_id = int(args[0].split("_")[1])
         session = get_session(msg_id)
@@ -37,13 +53,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Инструкция не найдена ❌")
         return
 
-    # Если бот вызван в группе — просто ответ
-    if chat_type in ["group", "supergroup"]:
-        await update.message.reply_text("Бот активен ✅\nЧтобы создать инструкцию, напиши /start в личку.")
+    # Только для разрешённых пользователей
+    if user_id not in ALLOWED_USER_IDS:
+        await update.message.reply_text("⛔ У тебя нет доступа к созданию инструкции.")
         return
 
-    # Старт в личке — начало создания инструкции
-    user_id = update.effective_user.id
     user_steps[user_id] = {
         "step": "photo",
         "photo": None,
@@ -55,21 +69,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+
     user_id = update.effective_user.id
     user = user_steps.get(user_id)
     if user and user["step"] == "photo":
         user["photo"] = update.message.photo[-1].file_id
         user["step"] = "caption"
         await update.message.reply_text("Шаг 2: Отправь подпись или /skip")
-    else:
-        await update.message.reply_text("Сначала напиши /start")
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+
     user_id = update.effective_user.id
     user = user_steps.get(user_id)
     if not user:
-        await update.message.reply_text("Сначала напиши /start")
         return
 
     text = update.message.text.strip()
@@ -99,10 +116,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+
     user_id = update.effective_user.id
     user = user_steps.get(user_id)
     if not user:
-        await update.message.reply_text("Сначала напиши /start")
         return
 
     if user["step"] == "caption":
@@ -113,7 +132,6 @@ async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user["step"].startswith("button_"):
         await send_final(update, context, user_id)
-        return
 
 
 async def send_final(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id):
@@ -172,17 +190,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    import os
-    token = os.environ.get("BOT_TOKEN")  # безопасный способ
-    if not token:
-        raise ValueError("Переменная окружения BOT_TOKEN не установлена")
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app = ApplicationBuilder().token(token).build()
-
-    app.add_handler(CommandHandler("start", start, filters=filters.ALL))  # важно!
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("skip", skip))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_text))
     app.add_handler(CallbackQueryHandler(button_callback))
 
     print("Бот запущен.")
